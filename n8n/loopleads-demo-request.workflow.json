@@ -1,0 +1,246 @@
+{
+  "name": "LoopLeads \u2014 Demo request (HubSpot + Resend)",
+  "nodes": [
+    {
+      "id": "42628ebb-408d-4b60-a9e6-e5bbe2692976",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "c1d44e43-4abc-45e4-b4d5-61498a72049f",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "loopleads-demo-request",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "15d4dfbc-4154-401d-9be1-28eb8da68cdd",
+      "name": "Secret valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "bfbf950b-dd45-40e0-9cd6-d264d68cd6bb",
+              "leftValue": "={{ $json.headers['x-loopleads-secret'] }}",
+              "rightValue": "REPLACE_WITH_N8N_WEBHOOK_SECRET",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b71eddeb-02fd-477d-9324-8b9bc04386d6",
+      "name": "Reject (401)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        480
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false } }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "95eb6d20-89aa-4726-83f0-36df16c86905",
+      "name": "Build payloads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// \u2500\u2500 LoopLeads: build HubSpot + Resend payloads \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// Edit these four values for your accounts.\nconst FROM = 'LoopLeads <demo@loopleads.app>';      // must be a Resend-verified domain\nconst REPLY_TO = 'hello@loopleads.app';               // where prospects' replies go\nconst TEAM_TO = ['team@loopleads.app'];               // who gets the internal alert\nconst BRAND = { navy: '#121627', navy700: '#1C2333', orange: '#E07A40', canvas: '#F6F4EF', slate: '#38434F' };\n\nconst body = $('Webhook').first().json.body || {};\nconst lead = body.lead || {};\nconst src = body.source || {};\nconst utm = src.utm || {};\nconst esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst planLabel = { light: 'LoopLeads Light', core: 'LoopLeads Core', unsure: 'Not sure yet' }[lead.plan] || 'Not sure yet';\n\nconst summary = [\n  `Demo request from loopleads.app`,\n  `Service type: ${lead.serviceType}`,\n  `Interested in: ${planLabel}`,\n  `Watched video: ${src.watchedVideo ? 'yes' : 'no'}`,\n  `Marketing opt-in: ${lead.marketingOptIn ? 'yes' : 'no'}`,\n  `UTM: ${['source','medium','campaign','term','content'].map(k => utm[k] ? `${k}=${utm[k]}` : '').filter(Boolean).join(', ') || 'none'}`,\n  `Page: ${src.pageUrl || ''}`,\n].join('\\n');\n\nconst hubspot = {\n  inputs: [{\n    idProperty: 'email',\n    id: lead.email,\n    properties: {\n      email: lead.email,\n      firstname: lead.firstName,\n      company: lead.businessName,\n      phone: lead.phoneE164 || lead.phone,\n      hs_lead_status: 'NEW',\n      message: summary,\n    },\n  }],\n};\n\nconst row = (k, v) => `<tr><td style=\"padding:6px 16px 6px 0;color:#5A6470;font-size:15px;white-space:nowrap\">${k}</td><td style=\"padding:6px 0;font-size:15px;font-weight:700;color:${BRAND.navy}\">${v}</td></tr>`;\nconst shell = (inner) => `<!doctype html><html><body style=\"margin:0;background:${BRAND.canvas};font-family:Arial,Helvetica,sans-serif;color:${BRAND.navy}\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:${BRAND.canvas};padding:32px 12px\"><tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden\">\n<tr><td style=\"background:${BRAND.navy700};padding:22px 28px;font-size:22px;font-weight:800;letter-spacing:-0.5px\"><span style=\"color:${BRAND.orange}\">LOOP</span><span style=\"color:${BRAND.canvas}\">LEADS</span></td></tr>\n<tr><td style=\"padding:28px\">${inner}</td></tr>\n<tr><td style=\"padding:18px 28px;background:${BRAND.canvas};font-size:13px;color:#5A6470\">LoopLeads \u2014 Every missed call deserves a second chance.</td></tr>\n</table></td></tr></table></body></html>`;\n\nconst leadHtml = shell(`\n<h1 style=\"margin:0 0 12px;font-size:24px;line-height:1.2\">Thanks, ${esc(lead.firstName)}. Your demo request is in.</h1>\n<p style=\"margin:0 0 16px;font-size:16px;line-height:1.6\">We'll reach out by phone or email to set up a 5-minute demo for <strong>${esc(lead.businessName)}</strong>. Here's what we'll cover:</p>\n<ol style=\"margin:0 0 20px;padding-left:20px;font-size:16px;line-height:1.6\">\n<li><strong>See the demo.</strong> A sample missed customer call, from the first ring to the owner email.</li>\n<li><strong>Check your setup.</strong> Your business number, call routing, and the kinds of calls you get.</li>\n<li><strong>Choose your starting point.</strong> If it's a fit, we'll explain the subscription, onboarding, and activation.</li>\n</ol>\n<p style=\"margin:0 0 6px;font-size:16px;line-height:1.6\">No need to understand AI, automation, or complicated software. We'll show you the customer experience in plain English.</p>\n<p style=\"margin:16px 0 0;font-size:16px;line-height:1.6\">Questions before then? Just reply to this email.</p>`);\n\nconst teamHtml = shell(`\n<div style=\"background:${BRAND.orange};color:${BRAND.navy};border-radius:6px 6px 0 0;padding:12px 16px;font-size:17px;font-weight:800\">New demo request</div>\n<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:12px 0 18px\">\n${row('Name', esc(lead.firstName))}\n${row('Business', esc(lead.businessName))}\n${row('Email', `<a href=\"mailto:${esc(lead.email)}\" style=\"color:${BRAND.navy}\">${esc(lead.email)}</a>`)}\n${row('Phone', `<a href=\"tel:${esc(lead.phoneE164)}\" style=\"color:${BRAND.navy}\">${esc(lead.phone)}</a>`)}\n${row('Service', esc(lead.serviceType))}\n${row('Interested in', esc(planLabel))}\n${row('Watched video', src.watchedVideo ? 'Yes' : 'No')}\n${row('Marketing opt-in', lead.marketingOptIn ? 'Yes' : 'No')}\n</table>\n<p style=\"margin:0;font-size:13px;color:#5A6470;white-space:pre-line\">${esc(summary)}</p>\n<p style=\"margin:18px 0 0;font-size:15px\"><strong>Next step:</strong> call ${esc(lead.firstName)} and book the 5-minute demo.</p>`);\n\nreturn [{ json: {\n  hubspot,\n  leadEmail: { from: FROM, to: [lead.email], reply_to: REPLY_TO, subject: 'Your LoopLeads demo request', html: leadHtml, tags: [{ name: 'type', value: 'demo_confirmation' }] },\n  teamEmail: { from: FROM, to: TEAM_TO, reply_to: lead.email, subject: `New demo request: ${lead.businessName} (${lead.serviceType})`, html: teamHtml, tags: [{ name: 'type', value: 'demo_internal_alert' }] },\n} }];\n"
+      }
+    },
+    {
+      "id": "89e3010c-dca2-4712-a681-fc231d0bfb61",
+      "name": "HubSpot: upsert contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build payloads').first().json.hubspot) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "9b56ee84-42c1-49fd-8791-c93e9d71e528",
+      "name": "Resend: confirm to prospect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build payloads').first().json.leadEmail) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "c5c60645-206a-4fd4-9234-a75c4b17f3ef",
+      "name": "Resend: alert the team",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build payloads').first().json.teamEmail) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "7f4f6caf-059d-41bc-b9a2-45d5a354356c",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Secret valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret valid?": {
+      "main": [
+        [
+          {
+            "node": "Build payloads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (401)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build payloads": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: upsert contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: upsert contact": {
+      "main": [
+        [
+          {
+            "node": "Resend: confirm to prospect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resend: confirm to prospect": {
+      "main": [
+        [
+          {
+            "node": "Resend: alert the team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resend: alert the team": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
